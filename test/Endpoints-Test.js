@@ -135,10 +135,21 @@ test('Successfully logins user and returns all events associated with that user'
           email,
           password
         })
+        .expect(201)
+        .then( res => {
+          t.ok(res.body.id_token, 'jwt should exist');
+        });
+    })
+    .then( res => {
+      return request(app)
+        .post('/user/login')
+        .send({
+          email,
+          password
+        })
         .expect(201);
     })
     .then( res => {
-      t.ok(res.body.id_token, 'jwt should exist');
       t.ok(res.body.events, 'events should exist');
       t.same(res.status, 201, 'correct status code was sent');
       destroy(t);
