@@ -6,6 +6,7 @@ const User = require('../Users/userModel.js');
 const tokenController = require('../Utils/tokenController');
 const _ = require('lodash');
 const Event = require('../Events/eventModel.js');
+const client = require('../../test/fixtures/DB-fixture').client;
 
 const userEventsController = {};
 
@@ -56,21 +57,36 @@ userEventsController.createUserEventConnection = (req, res, next) => {
 };
 
 userEventsController.getEvents = (req, res, next) => {
-  knex
-    .select()
-    .from('events')
-    .innerJoin('user-events', 'user-events.eventID', 'events.eventID')
-    .innerJoin('users', 'user-events.email', 'users.email')
-    .where('users.email', req.body.email)
-    .then( result => {
-      return res.status(201).send({
-        id_token: tokenController.createToken(req.body, req.body.email),
-        events: result
+  client.hgetall(req.body.email, (err, reply) => {
+    if (err) console.log('Error fetching events in redis', err.message);
+    
+    if (!reply) {
+      knex
+        .select()
+        .from('events')
+        .innerJoin('user-events', 'user-events.eventID', 'events.eventID')
+        .innerJoin('users', 'user-events.email', 'users.email')
+        .where('users.email', req.body.email)
+        .then( result => {
+          client.hset(req.body.email, 'events', JSON.stringify(result));
+          return res.status(201).send({
+            id_token: tokenController.createToken(req.body, req.body.email),
+            events: result
+          });
+        })
+        .catch( err => {
+          return res.status(400).send('Error querying for all events associated with user.');
+        });
+    } else {
+      client.hgetall(req.body.email, (err, obj) => {
+        if (err) return res.status(400).send('Error fetching events from cache.');
+
+        return res.status(201).send({
+          events: obj.events
+        });
       });
-    })
-    .catch( err => {
-      return res.status(400).send('Error querying for all events associated with user.');
-    });
+    }
+  });
 };
 
 userEventsController.updateUserEventConnection = (req, res, next) => {
